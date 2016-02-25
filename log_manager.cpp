@@ -62,7 +62,10 @@ void LogManager::CollectorBehav(caf::event_based_actor * self, LogManager * logm
           return caf::make_message(OkAtom::value);
         },
       [=](DataAtom, UInt64 Tid,UInt64 Partid, UInt64 pos, UInt64 offset,
-          UInt64 pointer,UInt64 len)->caf::message{
+          UInt64 buffer,UInt64 len)->caf::message{
+          string prefix = "data<"+to_string(Tid)+","+to_string(Partid)+","+
+              to_string(pos)+","+to_string(offset)+">\n"+kLogDataPrefix;
+          logm->Append(prefix,(char*)buffer,len,"\n"+kLogDataSuffix);
           return caf::make_message(OkAtom::value);
         },
       caf::others >> [=]() { cout << "unkown message" << endl; }
@@ -84,9 +87,7 @@ void LogManager::Append(const string & log){
   }
 
   fputs(log.c_str(),log_head);
-  //fprintf(log_head,"%s",log.c_str());
   size+=log.length();
-  //fflush(log_head);
   fflush(log_head);
 
   /* 日志文件已满 */
@@ -95,5 +96,29 @@ void LogManager::Append(const string & log){
     fclose(log_head);
     log_head = nullptr;
   }
+}
 
+void LogManager::Append(const string & prefix, char * buffer, UInt64 len, const string & suffix){
+  /* 新建日志文件 */
+  if (log_head == nullptr) {
+     struct timeval ts;
+     gettimeofday(&ts, NULL);
+     string file = log_path +"/"+ kLogFileName + to_string(ts.tv_sec);
+     log_head = fopen(file.c_str(),"a");
+     size = 0;
+  }
+
+  fputs(prefix.c_str(),log_head);
+  if(buffer[len-1]!=0)
+    buffer[len-1] = 0;
+  fputs(buffer,log_head);
+  fputs(suffix.c_str(),log_head);
+  size+=prefix.length()+suffix.length()+len;
+  fflush(log_head);
+
+  /* 日志文件已满 */
+  if(size >= kMaxLogSize ) {
+    fclose(log_head);
+    log_head = nullptr;
+  }
 }

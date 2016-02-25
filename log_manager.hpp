@@ -54,8 +54,10 @@ using DataAtom = caf::atom_constant<caf::atom("data")>;
 using CheckpointAtom = caf::atom_constant<caf::atom("checkpoint")>;
 
 using UInt64 = unsigned long long;
-const long long kMaxLogSize = 4 * 1024 * 1024;
+const long long kMaxLogSize = 128 * 1024 * 1024;
 const string kLogFileName = "claims.trans.log.";
+const string kLogDataPrefix = "<$@$claims.data.prefix@$@>\n";
+const string kLogDataSuffix = "<$@$claims.data.suffix@$@>\n";
 
 class LogManager {
  public:
@@ -102,9 +104,10 @@ class LogManager {
        [&](OkAtom) {}
    );
  }
- void LogData(void * buffer, UInt64 len){
+ void LogData(UInt64 Tid, UInt64 Partid, UInt64 Pos, UInt64 Offset,
+              char * buffer, UInt64 len){
    caf::scoped_actor self;
-   self->sync_send(collector,DataAtom::value,(UInt64)buffer, len).await(
+   self->sync_send(collector,DataAtom::value,Tid, Partid, Pos,Offset,(UInt64)buffer, len).await(
         [&](OkAtom) {}
     );
  }
@@ -123,6 +126,7 @@ class LogManager {
     caf::await_all_actors_done();
   }
   void Append(const string & log);
+  void Append(const string & prefix, char * buffer, UInt64 len, const string & suffix);
   static void CollectorBehav(caf::event_based_actor * self, LogManager * logm);
   static void CleanerBehav(caf::event_based_actor * self, LogManager * logm);
 };

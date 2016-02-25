@@ -38,21 +38,44 @@ using std::cout;
 using std::endl;
 using std::thread;
 using std::vector;
-LogManager logm = LogManager::getInstance();
-void task(int id) {
+auto logm = LogManager::getInstance();
+void task1(int id) {
   for(auto p=0;p<10000;p++ ) {
     logm.LogBegin(id*10000 + p);
     logm.LogCommit(id*10000 + p);
   }
 }
+/*
 int main (){
   logm.Startup();
   sleep(1);
   vector<thread> v;
   for(auto i= 0;i<100;i++)
-    v.push_back(thread(task,i));
+    v.push_back(thread(task1,i));
   for(auto i = 0;i<100;i++)
       v[i].join();
 }
+*/
+const int size =3000;
+char buffer[size];
 
+void task2(int id) {
+  for(auto i=0;i<100000;i++) {
+    logm.LogData(id,1,2,3,buffer,size);
+    //logm.LogCommit(id);
+    //logm.LogAbort(id);
+  }
+}
+int main() {
+   for(auto i=0;i<size-1;i++)
+     buffer[i]='a';
+   buffer[size-1]=0;
+  logm.Startup();
+  sleep(1);
+  vector<thread> v;
+  for(auto i=0;i<10;i++)
+    v.push_back(thread(task2,i));
+  for(auto i=0;i<10;i++)
+    v[i].join();
+}
 
