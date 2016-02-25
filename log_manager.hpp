@@ -54,7 +54,7 @@ using DataAtom = caf::atom_constant<caf::atom("data")>;
 using CheckpointAtom = caf::atom_constant<caf::atom("checkpoint")>;
 
 using UInt64 = unsigned long long;
-const long long kMaxLogSize = 64 * 1024 * 1024;
+const long long kMaxLogSize = 4 * 1024 * 1024;
 const string kLogFileName = "claims.trans.log.";
 
 class LogManager {

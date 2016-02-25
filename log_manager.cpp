@@ -73,30 +73,27 @@ void LogManager::CleanerBehav(caf::event_based_actor * self, LogManager * logm){
 
 }
 void LogManager::Append(const string & log){
-  cout <<"log:" << log << endl;
+  //cout <<"log:" << log << endl;
   /* 新建日志文件 */
- // if(log_head == NULL) {
-    //struct timeval ts;
-  //  gettimeofday(&ts, NULL);
+  if (log_head == nullptr) {
+     struct timeval ts;
+     gettimeofday(&ts, NULL);
+     string file = log_path +"/"+ kLogFileName + to_string(ts.tv_sec);
+     log_head = fopen(file.c_str(),"a");
+     size = 0;
+  }
 
-     cout <<"size: "<<size << endl;
-
-  //}
-  /*
-  cout << log_head << endl;
-  //fputs(log.c_str(),log_head);
-  fprintf(log_head,"%s",log.c_str());
-  cout << "finish write1" << endl;
+  fputs(log.c_str(),log_head);
+  //fprintf(log_head,"%s",log.c_str());
   size+=log.length();
-  cout << "finish write2" << endl;
-  fclose(log_head);
-  cout << "finish write3" << endl;
- */
+  //fflush(log_head);
+  fflush(log_head);
+
   /* 日志文件已满 */
-    /*
+
   if(size >= kMaxLogSize ) {
     fclose(log_head);
     log_head = nullptr;
   }
-  */
+
 }

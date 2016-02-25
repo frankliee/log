@@ -26,6 +26,8 @@
  *
  */
 #include <iostream>
+#include <thread>
+#include <vector>
 #include "unistd.h"
 #include "sys/time.h"
 #include "log_manager.hpp"
@@ -34,13 +36,23 @@
 using std::cin;
 using std::cout;
 using std::endl;
+using std::thread;
+using std::vector;
+LogManager logm = LogManager::getInstance();
+void task(int id) {
+  for(auto p=0;p<10000;p++ ) {
+    logm.LogBegin(id*10000 + p);
+    logm.LogCommit(id*10000 + p);
+  }
+}
 int main (){
-  LogManager logm = LogManager::getInstance();
   logm.Startup();
   sleep(1);
-  logm.LogBegin(45L);
-  logm.LogBegin(40L);
-  sleep(4);
+  vector<thread> v;
+  for(auto i= 0;i<100;i++)
+    v.push_back(thread(task,i));
+  for(auto i = 0;i<100;i++)
+      v[i].join();
 }
 
 
