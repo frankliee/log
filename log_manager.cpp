@@ -32,11 +32,13 @@
 #include "caf/all.hpp"
 #include "caf/io/all.hpp"
 #include "sys/time.h"
+#include "unistd.h"
 using std::string;
 using std::to_string;
 
-void LogManager::CollectorBehav(caf::event_based_actor * self, LogManager * logm){
+void LogManager::CollectorBehav(caf::event_based_actor * self, LogManager * log){
   cout << "log collect start" << endl;
+  LogManager * logm = &getInstance();
   self->become(
       [=](AppendAtom, string & log)->caf::message {
             cout << "logm:" << (UInt64)(&logm) << endl;
@@ -92,7 +94,7 @@ void LogManager::Append(const string & log){
 
   /* 日志文件已满 */
 
-  if(size >= kMaxLogSize ) {
+  if(size >= size_max ) {
     fclose(log_head);
     log_head = nullptr;
   }
@@ -103,22 +105,24 @@ void LogManager::Append(const string & prefix, char * buffer, UInt64 len, const 
   if (log_head == nullptr) {
      struct timeval ts;
      gettimeofday(&ts, NULL);
-     string file = log_path +"/"+ kLogFileName + to_string(ts.tv_sec);
+     string file = log_path +"/"+ kLogFileName +
+         to_string(ts.tv_sec*1000*1000 + ts.tv_usec);
      log_head = fopen(file.c_str(),"a");
      size = 0;
   }
 
   fputs(prefix.c_str(),log_head);
-  if(buffer[len-1]!=0)
-    buffer[len-1] = 0;
-  fputs(buffer,log_head);
+  fwrite(buffer,sizeof(char),len,log_head);
   fputs(suffix.c_str(),log_head);
-  size+=prefix.length()+suffix.length()+len;
+  size += prefix.length()+suffix.length()+len;
   fflush(log_head);
 
   /* 日志文件已满 */
-  if(size >= kMaxLogSize ) {
+  if(size >= size_max ) {
+
     fclose(log_head);
     log_head = nullptr;
   }
 }
+
+

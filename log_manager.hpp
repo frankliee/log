@@ -34,6 +34,7 @@
 #include <fstream>
 #include <iostream>
 #include <thread>
+#include "unistd.h"
 #include "caf/all.hpp"
 #include "caf/io/all.hpp"
 using std::string;
@@ -54,6 +55,7 @@ using DataAtom = caf::atom_constant<caf::atom("data")>;
 using CheckpointAtom = caf::atom_constant<caf::atom("checkpoint")>;
 
 using UInt64 = unsigned long long;
+using UInt32 = unsigned int;
 const long long kMaxLogSize = 128 * 1024 * 1024;
 const string kLogFileName = "claims.trans.log.";
 const string kLogDataPrefix = "<$@$claims.data.prefix@$@>\n";
@@ -65,57 +67,71 @@ class LogManager {
      static LogManager logManager;
      return logManager;
   }
- void setPath(string path){
-   log_path = path;
+ static void setPath(string path){
+   LogManager & logm = LogManager::getInstance();
+   logm.log_path = path;
  }
- void Startup(){
+ static void Startup(){
+   LogManager & logm = LogManager::getInstance();
    pthread_t pid;
-   pthread_create(&pid, NULL, MainThread, this);
- }
- void LogBegin(UInt64 Tid) {
+   pthread_create(&pid, NULL, MainThread, &logm);
+   sleep(1);
+  }
+ static void LogBegin(UInt64 Tid) {
+   LogManager & logm = LogManager::getInstance();
    caf::scoped_actor self;
   // self->send(collector,BeginAtom::value,Tid);
 
-   self->sync_send(collector,BeginAtom::value,Tid).await(
+   self->sync_send(logm.collector,BeginAtom::value,Tid).await(
        [&](OkAtom) {}
    );
  }
- void LogWrite(UInt64 Tid, UInt64 Partid, UInt64 Pos, UInt64 Offset) {
+ static void LogWrite(UInt64 Tid, UInt64 Partid, UInt64 Pos, UInt64 Offset) {
+   LogManager & logm = LogManager::getInstance();
    caf::scoped_actor self;
-   self->sync_send(collector,WriteAtom::value,Tid,Partid,Pos,Offset).await(
+   self->sync_send(logm.collector,WriteAtom::value,Tid,Partid,Pos,Offset).await(
        [&](OkAtom) {}
    );
  }
- void LogCommit(UInt64 Tid) {
+ static void LogCommit(UInt64 Tid) {
+   LogManager & logm = LogManager::getInstance();
    caf::scoped_actor self;
-   self->sync_send(collector,CommitAtom::value,Tid).await(
+   self->sync_send(logm.collector,CommitAtom::value,Tid).await(
        [&](OkAtom) {}
    );
  }
- void LogAbort(UInt64 Tid) {
+ static void LogAbort(UInt64 Tid) {
+   LogManager & logm = LogManager::getInstance();
    caf::scoped_actor self;
-   self->sync_send(collector,AbortAtom::value,Tid).await(
+   self->sync_send(logm.collector,AbortAtom::value,Tid).await(
        [&](OkAtom) {}
    );
  }
- void LogAppend(string  log){
+ static void LogAppend(string  log){
+   LogManager & logm = LogManager::getInstance();
    caf::scoped_actor self;
-   self->sync_send(collector,AppendAtom::value,log).await(
+   self->sync_send(logm.collector,AppendAtom::value,log).await(
        [&](OkAtom) {}
    );
  }
- void LogData(UInt64 Tid, UInt64 Partid, UInt64 Pos, UInt64 Offset,
+ static void LogData(UInt64 Tid, UInt64 Partid, UInt64 Pos, UInt64 Offset,
               char * buffer, UInt64 len){
+   LogManager & logm = LogManager::getInstance();
    caf::scoped_actor self;
-   self->sync_send(collector,DataAtom::value,Tid, Partid, Pos,Offset,(UInt64)buffer, len).await(
+   self->sync_send(logm.collector,DataAtom::value,Tid, Partid, Pos,Offset,
+                   (UInt64)buffer, len).await(
         [&](OkAtom) {}
     );
  }
+
  private:
  LogManager(){ }
+ LogManager(const LogManager & logm) {}
+ LogManager & operator = (const LogManager & logm) {}
   string log_path = ".";
   FILE * log_head = NULL;
   UInt64 size  = (UInt64)0;
+  UInt64 size_max = kMaxLogSize;
   caf::actor collector;
   caf::actor cleaner;
 

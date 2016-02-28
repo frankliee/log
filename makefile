@@ -1,11 +1,18 @@
-main: main.o log_manager.o
-	g++ -o main main.o log_manager.o -std=c++11 -O0 -g -lcaf_core -lcaf_io
+main: main.o log_manager.o tran_manager.o
+	g++ -o main main.o log_manager.o  tran_manager.o -std=c++11 -O0 -g -lcaf_core -lcaf_io \
+	-latomic
+ 
 
 main.o: main.cpp log_manager.hpp
-	g++ main.cpp -std=c++11 -O0 -g -c
+	g++ main.cpp -std=c++11 -O0 -g -c  
 
-log_manager.o: log_manager.cpp log_manager.hpp
-	g++ log_manager.cpp -std=c++11 -O0 -g -c
-	
+log_manager.o: log_manager.cpp log_manager.hpp tran_manager.hpp tran_manager.cpp
+	g++ log_manager.cpp -std=c++11 -O0 -g -c  
+
+tran_manager.o: tran_manager.cpp tran_manager.hpp log_manager.hpp log_manager.cpp
+	g++ tran_manager.cpp -std=c++11 -O0 -g -c  
+
+
+
 clean:
-	rm main.o log_manager.o
+	rm main.o log_manager.o tran_manager.o 
