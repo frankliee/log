@@ -36,6 +36,7 @@
 #include "unistd.h"
 #include "sys/time.h"
 #include "log_manager.hpp"
+#include "lock_free.hpp"
 #include "caf/all.hpp"
 #include "caf/io/all.hpp"
 
@@ -213,11 +214,37 @@ class A {
   A(){};
   A(int _a, int _b):a(_a),b(_b){}
 };
-
+int tmp1 = 0;
+int tmp2 = 1;
+void t(int * & t1, int * t2) {
+  t1 = t2;
+}
+class Trans{
+ public:
+  UInt64 TransId = 0;
+  char Type = kRead;
+  char Visible = kUVisible;
+  atomic<int> NPart;
+  atomic<int> NCommit;
+  atomic<int> NAbort;
+  vector<int *> StripList;
+};
 int  main(){
    atomic<shared_ptr<A>> ptr;
    ptr.store(make_shared<A>(2,3));
    cout << ptr.is_lock_free() << endl;
+   Tran tran;
+   Strip strip ;
+   cout << sizeof(tran) << endl;
+   cout << sizeof(strip) << endl;
   //cout << ptr.is_lock_free() << endl;
+   int * intp = &tmp1;
+   cout << *intp << endl;
+   t(intp,&tmp2);
+   cout << *intp << endl;
+   //TranService::Startup();
+    cout << sizeof(Node<Trans>) << endl;
+    LockFreeList<Tran> list;
+   //sleep(10);
 }
 

@@ -43,6 +43,7 @@ using std::thread;
 using std::cin;
 using std::cout;
 using std::endl;
+using std::to_string;
 
 using OkAtom = caf::atom_constant<caf::atom("ok")>;
 using FailAtom = caf::atom_constant<caf::atom("fail")>;
@@ -77,6 +78,9 @@ class LogManager {
    pthread_create(&pid, NULL, MainThread, &logm);
    sleep(1);
   }
+ inline static string getLogBeginContent(UInt64 Tid){
+   return "begin<"+to_string(Tid) +">\n";
+ }
  static void LogBegin(UInt64 Tid) {
    LogManager & logm = LogManager::getInstance();
    caf::scoped_actor self;
@@ -86,6 +90,7 @@ class LogManager {
        [&](OkAtom) {}
    );
  }
+
  static void LogWrite(UInt64 Tid, UInt64 Partid, UInt64 Pos, UInt64 Offset) {
    LogManager & logm = LogManager::getInstance();
    caf::scoped_actor self;
@@ -93,12 +98,18 @@ class LogManager {
        [&](OkAtom) {}
    );
  }
+ inline static string getLogCommitContent(UInt64 Tid) {
+   return "commit<"+to_string(Tid)+">\n";
+ }
  static void LogCommit(UInt64 Tid) {
    LogManager & logm = LogManager::getInstance();
    caf::scoped_actor self;
    self->sync_send(logm.collector,CommitAtom::value,Tid).await(
        [&](OkAtom) {}
    );
+ }
+ inline string getLogAbortContent(UInt64 Tid) {
+   return "abort<"+to_string(Tid)+">\n";
  }
  static void LogAbort(UInt64 Tid) {
    LogManager & logm = LogManager::getInstance();

@@ -33,11 +33,15 @@ void TranService::WebServiceBehav(caf::event_based_actor * self) {
 
 }
 
-void TranService::GarbageCollectBehav(caf::event_based_actor * self){
+void * TranService::GarbageCollectThread(void *){
 
 }
 
-void TranService::RecoveryFromLog() {
+void * TranService::LogDeleteThread(void *) {
+
+}
+
+void   TranService::RecoveryFromLog( ) {
 
 }
 
@@ -56,12 +60,80 @@ TranPtr TranAPIs::Local::CreateWriteTran(
                          tran_ptr->StripList[i]->Pos,
                          tran_ptr->StripList[i]->Offset);
   }
+
   do {
-    tran_ptr->NextPtr = ts.TM.WriteHeadPtr.load();
-  } while(!ts.TM.WriteHeadPtr.compare_exchange_weak(
+    tran_ptr->NextPtr = ts.TM.WriteHead.load();
+  } while(!ts.TM.WriteHead.compare_exchange_weak(
       tran_ptr->NextPtr,tran_ptr));
+  /**
+   * 统计信息修改
+   */
+  ts.TM.AbortPreCount ++;
   return tran_ptr;
 }
 
+TranPtr TranAPIs::Local::CreateReadTran(vector<UInt64> & partList){
+  TranService & ts = TranService::getInstance();
+  auto tid = ts.TM.TId.fetch_add(1);
+  TranPtr tran_ptr = make_shared<Tran>(tid, kRead, 1);
+  do {
+    tran_ptr->NextPtr = ts.TM.ReadHead.load();
+  } while(!ts.TM.ReadHead.compare_exchange_weak(
+      tran_ptr->NextPtr, tran_ptr));
+
+  return tran_ptr;
+}
+
+RetCode TranAPIs::Local::CommitWriteTran(TranPtr & tranPtr) {
+  //tranPtr->Commit();
+  TranService & ts = TranService::getInstance();
+  tranPtr->NCommit ++;
+  if (tranPtr->NCommit + tranPtr->NAbort == tranPtr->NPart
+      && tranPtr->NAbort == 0 )
+    tranPtr->Visible = kVisible;
+  /**
+   * 统计信息修改
+   */
+  ts.TM.CommitCount ++;
+  ts.TM.AbortPreCount --;
+  return 0;
+}
+
+RetCode TranAPIs::Local::AbortWriteTran(TranPtr & tranPtr) {
+  tranPtr->NAbort ++;
+  return 0;
+}
+
+RetCode TranAPIs::Local::CommitReadTran(TranPtr & tranPtr) {
+  tranPtr->NCommit ++;
+  return 0;
+}
+
+Snapshot GetSnapshot(vector<UInt64> & partList) {
+  Snapshot snapshot;
+  TranService & ts = TranService::getInstance();
+  for (auto & part : partList) {
+    snapshot.CheckpointList[part] = ts.TM.CheckpointList[part].MemoryPos;
+  }
+  auto ptr = ts.TM.WriteHead.load();
+  auto rate = (double)ts.TM.CommitCount / (double)ts.TM.AbortPreCount;
+  /**
+   * 普通方式扫描
+   */
+  if (rate > ts.LowerRate &&  rate < ts.UpperRate) { // scan implement
+    while (ptr !=  nullptr) {
+      if (ptr->Visible == kVisible) {
+        for (auto & item : ptr->StripList)
+          snapshot.StripList.push_back(*item);
+      }
+      ptr = ptr->NextPtr;
+    }
+  } else if (rate <= ts.LowerRate) { // simd implement
+
+  } else if (rate >= ts.UpperRate) { // simd implement
+
+  }
+  return snapshot;
+}
 
 
