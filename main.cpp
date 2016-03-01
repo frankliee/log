@@ -230,21 +230,11 @@ class Trans{
   vector<int *> StripList;
 };
 int  main(){
-   atomic<shared_ptr<A>> ptr;
-   ptr.store(make_shared<A>(2,3));
-   cout << ptr.is_lock_free() << endl;
-   Tran tran;
-   Strip strip ;
-   cout << sizeof(tran) << endl;
-   cout << sizeof(strip) << endl;
-  //cout << ptr.is_lock_free() << endl;
-   int * intp = &tmp1;
-   cout << *intp << endl;
-   t(intp,&tmp2);
-   cout << *intp << endl;
-   //TranService::Startup();
-    cout << sizeof(Node<Trans>) << endl;
-    LockFreeList<Tran> list;
-   //sleep(10);
+   TranService::Startup();
+   vector<pair<UInt64,UInt64>> args = {{1,4},{2,6}};
+   TranAPIs::Local::CreateWriteTran(args);
+   atomic<shared_ptr<int>> ptr;
+   ptr = nullptr;
+   LockFreeList<int> ls;
 }
 

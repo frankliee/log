@@ -41,32 +41,27 @@ using RetCode = int;
 template<typename T>
 class Node{
  public:
-  using Ptr = shared_ptr<Node>;
-  T Data;
-  Ptr Next;
-  Node(T & payload):Data(payload),Next(nullptr) { }
-  Node(T & payload, Ptr next):Data(payload),Next(next) { }
-  Ptr getNext() { return Next;}
+  T PayLoad;
+  shared_ptr<Node<T>> Next;
+  Node(){}
+  shared_ptr<Node<T>> getNext() { return Next;}
 };
 
 template<typename T>
 class LockFreeList {
  public:
-  using Ptr = shared_ptr<Node<T>>;
-  atomic<Ptr> Head;
-  atomic<int> Count;
-  LockFreeList() {Head = nullptr; Count = 0;}
-  void Insert(T& item) {
-    Node<T> new_node(item);
+  atomic<shared_ptr<Node<T>>> Head;
+  LockFreeList() { cout << "c" << endl;Head=nullptr; }
+  T* Insert() {
+    shared_ptr<Node<T>> new_node = make_shared<Node<T>>();
     do {
-        new_node.Next = Head.load();
-    } while (!Head.compare_exchange_weak(new_node.Next, new_node));
-    Count ++;
+        new_node->Next = Head.load();
+    } while (!Head.compare_exchange_weak(new_node->Next, new_node));
+    return &new_node->PayLoad;
    }
-  RetCode RemoveNext(Ptr & pre) {
+  RetCode RemoveNext(shared_ptr<Node<T>>  & pre) {
     if (pre->Next != nullptr) {
       pre->Next = pre->Next->Next;
-      Count --;
      }
   }
 };
