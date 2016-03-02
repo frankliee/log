@@ -29,6 +29,13 @@
 
 #include "tran_manager.hpp"
 
+TranManager TranService::TM;
+UInt16 TranService::Port = kDefaultTranPort;
+double TranService::LowerRate = kDefaulteLowerRate;
+double TranService::UpperRate = kDefaulteUpperRate;
+UInt32 TranService::GCInterval = kDefaultGCInterval;
+
+
 void TranService::WebServiceBehav(caf::event_based_actor * self) {
 
 }
@@ -45,37 +52,34 @@ void   TranService::RecoveryFromLog( ) {
 
 }
 
+void TranService::RecoveryFromCatalog() {
+
+}
+
 Tran * TranAPIs::Local::CreateWriteTran(
     vector<pair<UInt64,UInt64>> & partList){
-  cout << "s" << endl;
-  TranService & ts = TranService::getInstance();
-  cout << "ss" << endl;
- // auto tid = ts.TM.TId.fetch_add(1);
-  cout << "sss" << endl;
+
   /*
-  TranPtr tran_ptr = make_shared<Tran>(tid,  kWrite, partList.size());
-
-  LogManager::LogBegin(tid);
-  for (auto i=0; i<partList.size();i++) {
-    tran_ptr->StripList.push_back(new Strip());
-    tran_ptr->StripList[i]->PartId = partList[i].first;
-    tran_ptr->StripList[i]->Offset = partList[i].second;
-    tran_ptr->StripList[i]->Pos = ts.TM.PosList[tran_ptr->StripList[i]->PartId].
-        fetch_add(tran_ptr->StripList[i]->Offset);
-    LogManager::LogWrite(tid,tran_ptr->StripList[i]->PartId,
-                         tran_ptr->StripList[i]->Pos,
-                         tran_ptr->StripList[i]->Offset);
-  }
-
-  do {
-    tran_ptr->NextPtr = ts.TM.WriteHead.load();
-  } while(!ts.TM.WriteHead.compare_exchange_weak(
-      tran_ptr->NextPtr,tran_ptr));
-
-  */
-  ts.TM.AbortPreCount ++;
-
-
+    UInt64 id = TranService::TM.Id.fetch_add(1);
+    Tran* tran_ptr = TranService::TM.WriteList.Insert();
+    //cout << "s0" << endl;
+    tran_ptr->Init(id, kWrite);
+    //cout << "s1" << endl;
+    string log = LogService::LogBeginContent(id);
+    for (auto i=0; i<partList.size(); i++) {
+        auto partid = partList[i].first;
+        auto offset = partList[i].second;
+        auto pos = TranService::TM.PosList[partid].fetch_add(offset);
+        tran_ptr->StripList.emplace_back(partid, pos, offset);
+        log += LogService::LogWriteContent(tran_ptr->Id,partid,pos,offset);
+     }
+    cout << TranService::TM.WriteList.ToString() << endl;
+   // cout << "s2" << endl;
+    LogService::LogAppend(log);
+    TranService::TM.AbortPreCount ++;
+   // cout << "s3" << endl;
+    return tran_ptr;
+    */
 }
 
 Snapshot TranAPIs::Local::CreateReadTran(vector<UInt64> & partList){
@@ -107,31 +111,22 @@ Snapshot TranAPIs::Local::CreateReadTran(vector<UInt64> & partList){
   return snapshot;
 }
 
-RetCode TranAPIs::Local::CommitWriteTran(TranPtr & tranPtr) {
-  //tranPtr->Commit();
-  /*
-  TranService & ts = TranService::getInstance();
-  tranPtr->NCommit ++;
-  if (tranPtr->NCommit + tranPtr->NAbort == tranPtr->NPart
-      && tranPtr->NAbort == 0 )
-    tranPtr->Visible = kVisible;
-  /**
-   * 统计信息修改
-   */
-  /*
-  ts.TM.CommitCount ++;
-  ts.TM.AbortPreCount --;
-  return 0;
-  */
-}
-
-RetCode TranAPIs::Local::AbortWriteTran(TranPtr & tranPtr) {
-  tranPtr->NAbort ++;
+RetCode TranAPIs::Local::CommitWriteTran(Tran * tranPtr) {
+  tranPtr->IsVisible = true;
+  TranService::TM.CommitCount ++;
+  TranService::TM.AbortPreCount --;
+  LogService::LogCommit(tranPtr->Id);
   return 0;
 }
 
-RetCode TranAPIs::Local::CommitReadTran(TranPtr & tranPtr) {
-  tranPtr->NCommit ++;
+RetCode TranAPIs::Local::AbortWriteTran(Tran * tranPtr) {
+  tranPtr->IsGarbage = true;
+  LogService::LogAbort(tranPtr->Id);
+  return 0;
+}
+
+RetCode TranAPIs::Local::CommitReadTran(Tran * tranPtr) {
+
   return 0;
 }
 

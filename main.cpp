@@ -30,6 +30,7 @@
 #include <vector>
 #include <atomic>
 #include <map>
+#include <atomic>
 #include <memory>
 #include <time.h>
 #include <sys/time.h>
@@ -50,14 +51,14 @@ using std::map;
 using std::shared_ptr;
 using std::make_shared;
 using std::atomic_is_lock_free;
-LogManager & logm = LogManager::getInstance();
-Tran tran;
+ /*
 void task1(int id) {
   for(auto p=0;p<10000;p++ ) {
     logm.LogBegin(id*10000 + p);
     logm.LogCommit(id*10000 + p);
   }
 }
+*/
 /*
 int main (){
   logm.Startup();
@@ -73,8 +74,9 @@ const int size = 3000;
 char buffer[size];
 
 void task2(int id) {
-  for(auto i=0;i<10000;i++) {
-    LogManager:: LogData(id,1,2,3,buffer,size);
+  for(auto i=0;i<100 ;i++) {
+    LogService::LogAppend("ssss\n");
+    //LogManager:: LogData(id,1,2,3,buffer,size);
     //LogManager::FlushToDisk();
     //logm.LogCommit(id);
     //logm.LogAbort(id);
@@ -213,6 +215,10 @@ class A {
   int b;
   A(){};
   A(int _a, int _b):a(_a),b(_b){}
+  string ToString() {
+    return "a:"+to_string(a)+",b:"+to_string(b);
+  }
+  ~A() { cout << "A Destroy"<< a << ","<< b<< endl;}
 };
 int tmp1 = 0;
 int tmp2 = 1;
@@ -230,11 +236,37 @@ class Trans{
   vector<int *> StripList;
 };
 int  main(){
-   TranService::Startup();
-   vector<pair<UInt64,UInt64>> args = {{1,4},{2,6}};
-   TranAPIs::Local::CreateWriteTran(args);
-   atomic<shared_ptr<int>> ptr;
-   ptr = nullptr;
-   LockFreeList<int> ls;
+  //LogService::Startup();
+  //TranService::Startup();
+  /*
+  vector<pair<UInt64, UInt64>> args = {{1,22}, {2, 50}};
+  Tran * tran_ptr1 = TranAPIs::Local::CreateWriteTran(args);
+  Tran * tran_ptr2 = TranAPIs::Local::CreateWriteTran(args);
+
+  TranAPIs::Local::CommitWriteTran(tran_ptr2);
+  TranAPIs::Local::CommitWriteTran(tran_ptr1);
+  */
+  /*
+  LockFreeList<A> list;
+  auto ptr1 =  list.Insert();
+  ptr1->PayLoad.a = 1;
+  ptr1->PayLoad.b = 2;
+  auto ptr2 = list.Insert();
+  ptr2->PayLoad.a = 3;
+  ptr2->PayLoad.b = 4;
+  cout << list.ToString() << endl;
+  cout << list.ToString() << endl;
+*/
+
+/*
+
+  ptr2->PayLoad.a = 3;
+  ptr2->PayLoad.b = 4;
+  cout << list.ToString() << endl;
+*/
+  shared_ptr<A>  p = make_shared<A>(2,3);
+   atomic_is_lock_free<A>(&p)  ;
+  cout << "end" << endl;
 }
+
 

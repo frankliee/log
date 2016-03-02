@@ -76,102 +76,75 @@ const double kDefaulteUpperRate = 1000000;
 const int kDefaultGCInterval = 2;
 using GCAtom = caf::atom_constant<caf::atom("GC")>;
 
-class Strip {
- public:
+struct Strip {
   UInt64 PartId;
   UInt64 Pos;
   UInt64 Offset;
-  Strip():PartId(0),Pos(0),Offset(0) {}
+  Strip(UInt64 partId, UInt64 pos, UInt64 offset):
+  PartId(partId), Pos(pos), Offset(offset){}
 };
-using StripPtr = shared_ptr<Strip>;
-
-class Tran{
- public:
-  UInt64 TranId = 0;
-  char Type = kRead;
-  char Visible = kUVisible;
-  atomic<int> NPart;
-  atomic<int> NCommit;
-  atomic<int> NAbort;
-  vector<Strip *> StripList;
-  Tran() { Init(kInfinite, 0, 0);}
-
-  Tran(UInt64 transId,int type,UInt32 nPart):TranId(transId),Type(type){
-    Init(nPart, 0, 0);
-  }
-
-  Tran(const Tran & tran):TranId(tran.TranId),
-      Type(tran.Type), Visible(tran.Visible){
-    Init(tran.NPart, tran.NCommit , tran.NAbort);
-  }
-  Tran & operator = (const Tran & tran) {
-    TranId = tran.TranId;
-    Type = tran.Type;
-    Visible = tran.Visible;
-    Init(tran.NPart, tran.NCommit , tran.NAbort);
-  }
-  void Init(int nPart, int nCommit, int nAbort) {
-    NPart = nPart;
-    NCommit = nCommit;
-    NAbort = nAbort;
-  }
-  ~Tran(){
-    for (auto strip:StripList)
-      delete strip;
-  }
-};
-using TranPtr = shared_ptr<Tran>;
 
 struct Checkpoint{
   UInt64 MemoryPos;
   UInt64 HdfsPos;
 };
 
+class Tran{
+ public:
+  UInt64 Id = 0;
+  int Type = kRead;
+  bool IsVisible = false;
+  bool IsGarbage = false;
+  vector<Strip> StripList;
+  Tran() {}
+  void Init(UInt64 id, int type) {
+    Id = id;
+    Type = type;
+  }
+  void print() {
+    cout <<"id:"<< Id << endl;
+  }
+  ~Tran() {
+    cout << "tran destroy" << endl;
+  }
+  string ToString() {
+    return "Id:"+to_string(Id)+",Type:"+to_string(Type)+
+        ",IsVisible:"+to_string(IsVisible)+",isGarbage:"+to_string(IsGarbage);
+  }
+};
+
 struct TranManager{
-  atomic<UInt64> TId;
-  atomic<TranPtr> WriteHead;
+  atomic<UInt64> Id;
   atomic<UInt32> CommitCount;
   atomic<UInt32> AbortPreCount;
-  atomic<UInt32> OldReadTaskCount;
   unordered_map<UInt64,Checkpoint> CheckpointList;
   unordered_map<UInt64,atomic<UInt64>> PosList;
-  LockFreeList<int> WriteList;
-
+  LockFreeList<Tran> WriteList;
+  //LockFreeList<pair<>>
 };
 
 class TranService{
  public:
-  TranManager TM;
-  UInt16 Port = kDefaultTranPort;
-  double UpperRate = 0;
-  double LowerRate = 0;
-  int GCInterval = kDefaultGCInterval;
-  static TranService & getInstance(){
-    cout << "a" << endl;
-   static TranService trans_service;
-   cout << "aa" << endl;
-   return trans_service;
-  }
+  static TranManager TM;
+  static UInt16 Port;
+  static double UpperRate;
+  static double LowerRate;
+  static UInt32 GCInterval;
   static void setPort(UInt16 port) {
-   TranService & ts = TranService::getInstance();
-   ts.Port = port;
+    Port = port;
    }
   static void setUpperRate(double upperRate) {
-    TranService & ts = TranService::getInstance();
-    ts.UpperRate = upperRate;
+    UpperRate = upperRate;
   }
   static void setLowerRate(double lowerRate) {
-    TranService & ts = TranService::getInstance();
-    ts.LowerRate = lowerRate;
+    LowerRate = lowerRate;
   }
   static void setGCInterval (int interval) {
-    TranService &ts = TranService::getInstance();
-    ts.GCInterval = interval;
-
+    GCInterval = interval;
   }
   static void Startup() {
+   RecoveryFromCatalog();
    RecoveryFromLog();
-  // LogManager::Startup();
    //pthread_t pid;
    //pthread_create(&pid, NULL, WebServiceThread, NULL);
    //pthread_create(&pid, NULL, GarbageCollectThread, NULL);
@@ -180,6 +153,7 @@ class TranService{
   }
  private:
    static void RecoveryFromLog();
+   static void RecoveryFromCatalog();
    static void * WebServiceThread(void * arg){
      caf::spawn(WebServiceBehav);
      caf::await_all_actors_done();
@@ -188,9 +162,6 @@ class TranService{
    static void * GarbageCollectThread(void*);
    static void * LogDeleteThread(void*);
 
-   TranService(){}
-   TranService(const TranService & tran_service) {}
-   TranService & operator = (const TranService & trans_service){}
 };
 struct SnapshotPart {
   UInt64 CheckpointPos;
@@ -207,9 +178,9 @@ class TranAPIs{
    public:
     static Tran * CreateWriteTran(vector<pair<UInt64,UInt64>> & partList);
     static Snapshot CreateReadTran(vector<UInt64> & partList);
-    inline static RetCode CommitWriteTran(TranPtr & tranPtr);
-    inline static RetCode AbortWriteTran(TranPtr & tranPtr);
-    inline static RetCode CommitReadTran(TranPtr & tranPtr);
+    static RetCode CommitWriteTran(Tran * tranPtr);
+    static RetCode AbortWriteTran(Tran * tranPtr);
+    static RetCode CommitReadTran(Tran * tranPtr);
 
   };
   class Web{};

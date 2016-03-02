@@ -64,101 +64,89 @@ const string kLogDataSuffix = "<$@$claims.data.suffix@$@>\n";
 
 class LogManager {
  public:
-  static LogManager & getInstance() {
-     static LogManager logManager;
-     return logManager;
-  }
- static void setPath(string path){
-   LogManager & logm = LogManager::getInstance();
-   logm.log_path = path;
- }
- static void Startup(){
-   LogManager & logm = LogManager::getInstance();
-   pthread_t pid;
-   pthread_create(&pid, NULL, MainThread, &logm);
-   sleep(1);
-  }
- inline static string getLogBeginContent(UInt64 Tid){
-   return "begin<"+to_string(Tid) +">\n";
- }
- static void LogBegin(UInt64 Tid) {
-   LogManager & logm = LogManager::getInstance();
-   caf::scoped_actor self;
-  // self->send(collector,BeginAtom::value,Tid);
-
-   self->sync_send(logm.collector,BeginAtom::value,Tid).await(
-       [&](OkAtom) {}
-   );
- }
-
- static void LogWrite(UInt64 Tid, UInt64 Partid, UInt64 Pos, UInt64 Offset) {
-   LogManager & logm = LogManager::getInstance();
-   caf::scoped_actor self;
-   self->sync_send(logm.collector,WriteAtom::value,Tid,Partid,Pos,Offset).await(
-       [&](OkAtom) {}
-   );
- }
- inline static string getLogCommitContent(UInt64 Tid) {
-   return "commit<"+to_string(Tid)+">\n";
- }
- static void LogCommit(UInt64 Tid) {
-   LogManager & logm = LogManager::getInstance();
-   caf::scoped_actor self;
-   self->sync_send(logm.collector,CommitAtom::value,Tid).await(
-       [&](OkAtom) {}
-   );
- }
- inline string getLogAbortContent(UInt64 Tid) {
-   return "abort<"+to_string(Tid)+">\n";
- }
- static void LogAbort(UInt64 Tid) {
-   LogManager & logm = LogManager::getInstance();
-   caf::scoped_actor self;
-   self->sync_send(logm.collector,AbortAtom::value,Tid).await(
-       [&](OkAtom) {}
-   );
- }
- static void LogAppend(string  log){
-   LogManager & logm = LogManager::getInstance();
-   caf::scoped_actor self;
-   self->sync_send(logm.collector,AppendAtom::value,log).await(
-       [&](OkAtom) {}
-   );
- }
- static void LogData(UInt64 Tid, UInt64 Partid, UInt64 Pos, UInt64 Offset,
-              char * buffer, UInt64 len){
-   LogManager & logm = LogManager::getInstance();
-   caf::scoped_actor self;
-   self->sync_send(logm.collector,DataAtom::value,Tid, Partid, Pos,Offset,
-                   (UInt64)buffer, len).await(
-        [&](OkAtom) {}
-    );
- }
-
- private:
- LogManager(){ }
- LogManager(const LogManager & logm) {}
- LogManager & operator = (const LogManager & logm) {}
   string log_path = ".";
   FILE * log_head = NULL;
   UInt64 size  = (UInt64)0;
   UInt64 size_max = kMaxLogSize;
-  caf::actor collector;
-  caf::actor cleaner;
-
-  static void * MainThread(void * arg){
-    LogManager* logm =  (LogManager*)arg;
-    logm->collector = caf::spawn(CollectorBehav, logm);
-    logm->cleaner = caf::spawn(CleanerBehav, logm);
-    caf::await_all_actors_done();
-  }
   void Append(const string & log);
   void Append(const string & prefix, char * buffer, UInt64 len, const string & suffix);
-  static void CollectorBehav(caf::event_based_actor * self, LogManager * logm);
-  static void CleanerBehav(caf::event_based_actor * self, LogManager * logm);
+
 };
 
+class LogService {
+ public:
+  static LogManager LogM;
+  static caf::actor Collector;
+  static caf::actor Cleaner;
+  inline static string LogBeginContent(UInt64 Tid){
+    return "begin<"+to_string(Tid) +">\n";
+  }
 
+  inline static string LogWriteContent(UInt64 id,UInt64 partId, UInt64 pos,UInt64 offset) {
+    return "write<"+to_string(id)+","+to_string(partId)+","+
+        to_string(pos)+","+to_string(offset)+">\n";
+  }
+
+  inline static string LogCommitContent(UInt64 Tid) {
+    return "commit<"+to_string(Tid)+">\n";
+  }
+
+  inline static string LogAbortContent(UInt64 Tid) {
+    return "abort<"+to_string(Tid)+">\n";
+  }
+
+  static void LogBegin(UInt64 Tid) {
+     caf::scoped_actor self;
+     self->sync_send(Collector,BeginAtom::value,Tid).await(
+         [&](OkAtom) {}
+     );
+   }
+  static void LogCommit(UInt64 Tid) {
+    caf::scoped_actor self;
+    self->sync_send(Collector,CommitAtom::value,Tid).await(
+        [&](OkAtom) {}
+    );
+  }
+  static void LogAbort(UInt64 Tid) {
+     caf::scoped_actor self;
+     self->sync_send(Collector,AbortAtom::value,Tid).await(
+         [&](OkAtom) {}
+     );
+   }
+   static void LogAppend(string  log){
+     caf::scoped_actor self;
+     self->sync_send(Collector,AppendAtom::value,log).await(
+         [&](OkAtom) {}
+     );
+   }
+   static void LogData(UInt64 Tid, UInt64 Partid, UInt64 Pos, UInt64 Offset,
+                char * buffer, UInt64 len){
+     caf::scoped_actor self;
+     self->sync_send(Collector,DataAtom::value,Tid, Partid, Pos,Offset,
+                     (UInt64)buffer, len).await(
+          [&](OkAtom) {}
+      );
+   }
+   static void LogWrite(UInt64 Tid, UInt64 Partid, UInt64 Pos, UInt64 Offset) {
+     caf::scoped_actor self;
+     self->sync_send(Collector,WriteAtom::value,Tid,Partid,Pos,Offset).await(
+         [&](OkAtom) {}
+     );
+   }
+   static void Startup(){
+     pthread_t pid;
+     pthread_create(&pid, NULL, MainThread, nullptr);
+     sleep(1);
+    }
+
+   static void * MainThread(void * arg){
+     Collector = caf::spawn(CollectorBehav);
+     Cleaner = caf::spawn(CleanerBehav);
+     caf::await_all_actors_done();
+   }
+   static void CollectorBehav(caf::event_based_actor * self );
+   static void CleanerBehav(caf::event_based_actor * self );
+};
 
 
 #endif //  LOG_MANAGER_HPP_ 

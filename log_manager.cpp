@@ -36,45 +36,46 @@
 using std::string;
 using std::to_string;
 
-void LogManager::CollectorBehav(caf::event_based_actor * self, LogManager * log){
+LogManager LogService::LogM;
+caf::actor LogService::Collector;
+caf::actor LogService::Cleaner;
+
+void LogService::CollectorBehav(caf::event_based_actor * self){
   cout << "log collect start" << endl;
-  LogManager * logm = &getInstance();
   self->become(
       [=](AppendAtom, string & log)->caf::message {
-            cout << "logm:" << (UInt64)(&logm) << endl;
-          logm->Append(log);
+          LogM.Append(log);
           return caf::make_message(OkAtom::value);
         },
-      [=](BeginAtom, UInt64 Tid)->caf::message {
-          logm->Append("begin<"+to_string(Tid) +">\n");
+      [=](BeginAtom, UInt64 id)->caf::message {
+          LogM.Append(LogBeginContent(id));
           return caf::make_message(OkAtom::value);
         },
-      [=](WriteAtom,UInt64 Tid, UInt64 Partid, UInt64 pos,
+      [=](WriteAtom,UInt64 id, UInt64 partid, UInt64 pos,
           UInt64 offset)->caf::message {
-          logm->Append("write<"+to_string(Tid)+","+to_string(Partid)+","+
-                       to_string(pos)+","+to_string(offset)+">\n");
+          LogM.Append(LogWriteContent(id, partid, pos, offset));
           return caf::make_message(OkAtom::value);
         },
-      [=](CommitAtom, UInt64 Tid)->caf::message{
-          logm->Append("commit<"+to_string(Tid)+">\n");
+      [=](CommitAtom, UInt64 id)->caf::message{
+          LogM.Append(LogCommitContent(id));
           return caf::make_message(OkAtom::value);
         },
-      [=](AbortAtom, UInt64 Tid)->caf::message{
-          logm->Append("abort<"+to_string(Tid)+">\n");
+      [=](AbortAtom, UInt64 id)->caf::message{
+          LogM.Append(LogAbortContent(id));
           return caf::make_message(OkAtom::value);
         },
       [=](DataAtom, UInt64 Tid,UInt64 Partid, UInt64 pos, UInt64 offset,
           UInt64 buffer,UInt64 len)->caf::message{
           string prefix = "data<"+to_string(Tid)+","+to_string(Partid)+","+
               to_string(pos)+","+to_string(offset)+">\n"+kLogDataPrefix;
-          logm->Append(prefix,(char*)buffer,len,"\n"+kLogDataSuffix);
+          LogM.Append(prefix,(char*)buffer,len,"\n"+kLogDataSuffix);
           return caf::make_message(OkAtom::value);
         },
       caf::others >> [=]() { cout << "unkown message" << endl; }
   );
 
 }
-void LogManager::CleanerBehav(caf::event_based_actor * self, LogManager * logm){
+void LogService::CleanerBehav(caf::event_based_actor * self){
 
 }
 void LogManager::Append(const string & log){

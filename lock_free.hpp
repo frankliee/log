@@ -45,25 +45,87 @@ class Node{
   shared_ptr<Node<T>> Next;
   Node(){}
   shared_ptr<Node<T>> getNext() { return Next;}
+  string ToString() {
+     return String(PayLoad);
+  }
 };
 
 template<typename T>
 class LockFreeList {
  public:
   atomic<shared_ptr<Node<T>>> Head;
-  LockFreeList() { cout << "c" << endl;Head=nullptr; }
-  T* Insert() {
+  LockFreeList() { Head=nullptr;}
+        shared_ptr<Node<T>> Insert() {
     shared_ptr<Node<T>> new_node = make_shared<Node<T>>();
     do {
-        new_node->Next = Head.load();
-    } while (!Head.compare_exchange_weak(new_node->Next, new_node));
-    return &new_node->PayLoad;
+        new_node->Next = Head;
+    } while (!Head.compare_exchange_strong(new_node->Next, new_node));
+
+    return new_node;
    }
   RetCode RemoveNext(shared_ptr<Node<T>>  & pre) {
     if (pre->Next != nullptr) {
       pre->Next = pre->Next->Next;
      }
+    return 0;
+  }
+  string ToString() {
+    string buffer = "lockfreelist\n";
+    shared_ptr<Node<T>> ptr = Head;
+    while (ptr != nullptr) {
+      cout << "iterator1" << endl;
+      buffer += ptr->PayLoad.ToString() + string("\n");
+      cout << "iterator2" << endl;
+      ptr = ptr->Next;
+      cout << "iterator3" << endl;
+    }
+    return buffer;
+  }
+};
+template<typename T>
+class Node2{
+ public:
+  T PayLoad;
+  Node2<T> * Next;
+  Node2(){}
+  Node2<T> getNext() { return Next;}
+  string ToString() {
+     return String(PayLoad);
   }
 };
 
+template<typename T>
+class LockFreeList2 {
+ public:
+  atomic<Node2<T>*> Head;
+  LockFreeList2() { Head = nullptr;}
+  T* Insert() {
+   Node2<T> *  new_node = new Node2<T>();
+
+    do {
+        new_node->Next = Head.load();
+    } while (!Head.compare_exchange_weak(new_node->Next, new_node));
+
+    return &new_node->PayLoad;
+
+   }
+  RetCode RemoveNext(shared_ptr<Node<T>>  & pre) {
+    if (pre->Next != nullptr) {
+      pre->Next = pre->Next->Next;
+     }
+    return 0;
+  }
+  string ToString() {
+    string buffer = "lockfreelist\n";
+    auto ptr = Head.load();
+    while (ptr != nullptr) {
+      cout << "iterator1" << endl;
+      buffer += ptr->PayLoad.ToString() + string("\n");
+      cout << "iterator2" << endl;
+      ptr = ptr->Next;
+      cout << "iterator3" << endl;
+    }
+    return buffer;
+  }
+};
 #endif //  LOCK_FREE_HPP_ 
