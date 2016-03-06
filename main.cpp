@@ -38,6 +38,7 @@
 #include "sys/time.h"
 #include "log_manager.hpp"
 #include "lock_free.hpp"
+#include "gc_manager.hpp"
 #include "caf/all.hpp"
 #include "caf/io/all.hpp"
 
@@ -225,6 +226,7 @@ int tmp2 = 1;
 void t(int * & t1, int * t2) {
   t1 = t2;
 }
+
 class Trans{
  public:
   UInt64 TransId = 0;
@@ -235,6 +237,15 @@ class Trans{
   atomic<int> NAbort;
   vector<int *> StripList;
 };
+LockFreeList<A> list;
+void task10(int id){
+  for (auto i=0;i<10;i++) {
+    auto ptr = list.Insert();
+    ptr->getPayLoad()->a = id;
+    ptr->getPayLoad()->b = id;
+    sleep(1);
+  }
+}
 int  main(){
   //LogService::Startup();
   //TranService::Startup();
@@ -264,9 +275,25 @@ int  main(){
   ptr2->PayLoad.b = 4;
   cout << list.ToString() << endl;
 */
-  shared_ptr<A>  p = make_shared<A>(2,3);
-   atomic_is_lock_free<A>(&p)  ;
-  cout << "end" << endl;
+
+/*
+  auto ptr1 = list.Insert();
+  ptr1->getPayLoad()->a = 1;
+  ptr1->getPayLoad()->b = 1;
+  cout << list.ToString() << endl;
+
+  auto ptr2 = list.Insert();
+  ptr2->getPayLoad()->a = 2;
+  ptr2->getPayLoad()->b = 2;
+  cout << list.ToString() << endl;
+*/
+  vector<thread> vt;
+  for (auto i=0;i<10;i++)
+    vt.push_back(thread(task10 ,i));
+  for (auto i=0;i<10;i++)
+    vt[i].join();
+  cout << list.ToString() << endl;
+
 }
 
 

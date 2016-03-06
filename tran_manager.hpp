@@ -74,7 +74,7 @@ const UInt16 kDefaultTranPort = 8082;
 const double kDefaulteLowerRate = 0;
 const double kDefaulteUpperRate = 1000000;
 const int kDefaultGCInterval = 2;
-using GCAtom = caf::atom_constant<caf::atom("GC")>;
+
 
 struct Strip {
   UInt64 PartId;
@@ -149,7 +149,7 @@ class TranService{
    //pthread_create(&pid, NULL, WebServiceThread, NULL);
    //pthread_create(&pid, NULL, GarbageCollectThread, NULL);
    //pthread_create(&pid, NULL, LogDeleteThread, NULL);
-   sleep(1);
+
   }
  private:
    static void RecoveryFromLog();

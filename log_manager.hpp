@@ -136,7 +136,6 @@ class LogService {
    static void Startup(){
      pthread_t pid;
      pthread_create(&pid, NULL, MainThread, nullptr);
-     sleep(1);
     }
 
    static void * MainThread(void * arg){
