@@ -1,5 +1,5 @@
 main: main.o log_manager.o tran_manager.o lock_free.o gc_manager.o
-	g++ -o main main.o log_manager.o  tran_manager.o -std=c++11 -O0 -g \
+	g++ -o main main.o log_manager.o  tran_manager.o gc_manager.o -std=c++11 -O0 -g \
 	-lcaf_core -lcaf_io -latomic
  
 
@@ -19,4 +19,4 @@ gc_manager.o: gc_manager.hpp gc_manager.cpp
 	g++ gc_manager.cpp -std=c++11 -O0 -g -c;
 
 clean:
-	rm main.o log_manager.o tran_manager.o lock_free.o
+	rm main.o log_manager.o tran_manager.o lock_free.o gc_manager.o

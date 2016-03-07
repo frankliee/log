@@ -134,15 +134,10 @@ class LogService {
      );
    }
    static void Startup(){
-     pthread_t pid;
-     pthread_create(&pid, NULL, MainThread, nullptr);
-    }
-
-   static void * MainThread(void * arg){
      Collector = caf::spawn(CollectorBehav);
      Cleaner = caf::spawn(CleanerBehav);
-     caf::await_all_actors_done();
-   }
+    }
+
    static void CollectorBehav(caf::event_based_actor * self );
    static void CleanerBehav(caf::event_based_actor * self );
 };

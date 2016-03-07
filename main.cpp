@@ -287,13 +287,30 @@ int  main(){
   ptr2->getPayLoad()->b = 2;
   cout << list.ToString() << endl;
 */
+  /*
   vector<thread> vt;
   for (auto i=0;i<10;i++)
     vt.push_back(thread(task10 ,i));
   for (auto i=0;i<10;i++)
     vt[i].join();
   cout << list.ToString() << endl;
-
+  */
+  {
+  int * a = new int(4);
+  cout << *a << endl;
+  GCService::Startup();
+  sleep(1);
+  GCService::Collect(GCService::kInt, a);
+  cout << *a << endl;
+  sleep(4);
+  cout << *a << endl;
+  }
+  cout << sizeof(Strip) << endl;
+  cout << sizeof(Tran) << endl;
+  vector<UInt64> partList = {1, 3};
+  Snapshot snapshot;
+  TranAPIs::Local::getSnapshot(partList, snapshot);
+  caf::await_all_actors_done();
 }
 
 

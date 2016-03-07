@@ -57,6 +57,7 @@ using std::atomic_is_lock_free;
 using std::map;
 using std::pair;
 using std::unordered_map;
+
 using UInt64 = unsigned long long;
 using UInt32 = unsigned int;
 using UInt16 = unsigned short;
@@ -76,111 +77,106 @@ const double kDefaulteUpperRate = 1000000;
 const int kDefaultGCInterval = 2;
 
 
-struct Strip {
+
+class Strip {
+ public:
   UInt64 PartId;
   UInt64 Pos;
-  UInt64 Offset;
-  Strip(UInt64 partId, UInt64 pos, UInt64 offset):
-  PartId(partId), Pos(pos), Offset(offset){}
+  UInt32 Offset;
+  Strip(){}
+  Strip(UInt64 partId, UInt64 pos, UInt32 offset):
+    PartId(partId), Pos(pos), Offset(offset){}
+  string ToString() {
+    return "PartId:"+to_string(PartId)+",Pos:"+to_string(Pos)+
+        ",Offset:"+to_string(Offset)+"\n";
+   }
 };
 
-struct Checkpoint{
-  UInt64 MemoryPos;
-  UInt64 HdfsPos;
-};
 
 class Tran{
  public:
   UInt64 Id = 0;
-  int Type = kRead;
+  //int Type = kRead;
   bool IsVisible = false;
   bool IsGarbage = false;
   vector<Strip> StripList;
   Tran() {}
-  void Init(UInt64 id, int type) {
-    Id = id;
-    Type = type;
-  }
-  void print() {
-    cout <<"id:"<< Id << endl;
-  }
-  ~Tran() {
-    cout << "tran destroy" << endl;
-  }
+  ~Tran() {}
+  void setID(UInt64 id){ Id = id;}
   string ToString() {
-    return "Id:"+to_string(Id)+",Type:"+to_string(Type)+
-        ",IsVisible:"+to_string(IsVisible)+",isGarbage:"+to_string(IsGarbage);
+    string stripList = "striplist:\n";
+    for (auto & strip:StripList)
+        stripList += strip.ToString();
+    return "Id:"+to_string(Id)+",IsVisible:"+to_string(IsVisible)+
+        ",isGarbage:"+to_string(IsGarbage)+"\n"+stripList;
   }
 };
 
 struct TranManager{
   atomic<UInt64> Id;
   atomic<UInt32> CommitCount;
-  atomic<UInt32> AbortPreCount;
-  unordered_map<UInt64,Checkpoint> CheckpointList;
+  atomic<UInt32> Count;
+  unordered_map<UInt64, UInt64> MemCPList;
+  unordered_map<UInt64, UInt64> HdfsCPList;
   unordered_map<UInt64,atomic<UInt64>> PosList;
-  LockFreeList<Tran> WriteList;
-  //LockFreeList<pair<>>
+  LockFreeList<Tran> TranList;
 };
 
 class TranService{
  public:
   static TranManager TM;
   static UInt16 Port;
-  static double UpperRate;
-  static double LowerRate;
-  static UInt32 GCInterval;
+  static double UTranGCRate;
+  static double LTranGCRate;
+  static UInt32 TranGCTime;
   static void setPort(UInt16 port) {
     Port = port;
    }
-  static void setUpperRate(double upperRate) {
-    UpperRate = upperRate;
+  static void setUpperRate(double uTranGCRate) {
+    UTranGCRate = uTranGCRate;
   }
-  static void setLowerRate(double lowerRate) {
-    LowerRate = lowerRate;
+  static void setLowerRate(double lTranGCRate) {
+    LTranGCRate = lTranGCRate;
   }
-  static void setGCInterval (int interval) {
-    GCInterval = interval;
+  static void setGCTime (int time) {
+    TranGCTime = time;
   }
   static void Startup() {
    RecoveryFromCatalog();
    RecoveryFromLog();
-   //pthread_t pid;
-   //pthread_create(&pid, NULL, WebServiceThread, NULL);
-   //pthread_create(&pid, NULL, GarbageCollectThread, NULL);
-   //pthread_create(&pid, NULL, LogDeleteThread, NULL);
-
+   caf::spawn(WebAPIsBehav);
   }
  private:
    static void RecoveryFromLog();
    static void RecoveryFromCatalog();
-   static void * WebServiceThread(void * arg){
-     caf::spawn(WebServiceBehav);
-     caf::await_all_actors_done();
-   }
-   static void   WebServiceBehav(caf::event_based_actor * self);
-   static void * GarbageCollectThread(void*);
-   static void * LogDeleteThread(void*);
+   static void WebAPIsBehav(caf::event_based_actor * self);
+   static void TranGCBehav(caf::event_based_actor * self);
+   static void LogGCBehav(caf::event_based_actor * self);
+};
 
-};
-struct SnapshotPart {
-  UInt64 CheckpointPos;
-  vector<Strip> StripList;
-};
-struct Snapshot {
-  unordered_map<UInt64,UInt64> CheckpointList;
-  vector<Strip> StripList;
+using Snapshot = map<UInt64, vector<Strip>>;
+
+struct Checkpoint{
+  UInt64 Id;
+  UInt64 PartId;
+  UInt64 NewMemPos;
+  UInt64 NewHdfsPos;
 };
 
 class TranAPIs{
  public:
   class Local{
    public:
-    static Tran * CreateWriteTran(vector<pair<UInt64,UInt64>> & partList);
-    static Snapshot CreateReadTran(vector<UInt64> & partList);
+    static Tran * CreateWriteTran(vector<UInt64> & partList,
+                                  vector<UInt32> & tupleNumList);
     static RetCode CommitWriteTran(Tran * tranPtr);
     static RetCode AbortWriteTran(Tran * tranPtr);
-    static RetCode CommitReadTran(Tran * tranPtr);
+
+    static RetCode getSnapshot(vector<UInt64> & partList, Snapshot & snapshot);
+
+    static Checkpoint CreateCPTran(UInt64 partId);
+    static RetCode CommitCPTran(Checkpoint & cp);
+    static RetCode AbortCPTran(Checkpoint & cp);
 
   };
   class Web{};

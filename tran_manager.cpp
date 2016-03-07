@@ -31,24 +31,24 @@
 
 TranManager TranService::TM;
 UInt16 TranService::Port = kDefaultTranPort;
-double TranService::LowerRate = kDefaulteLowerRate;
-double TranService::UpperRate = kDefaulteUpperRate;
-UInt32 TranService::GCInterval = kDefaultGCInterval;
+double TranService::LTranGCRate = kDefaulteLowerRate;
+double TranService::UTranGCRate = kDefaulteUpperRate;
+UInt32 TranService::TranGCTime = kDefaultGCInterval;
 
 
-void TranService::WebServiceBehav(caf::event_based_actor * self) {
-
-}
-
-void * TranService::GarbageCollectThread(void *){
+void TranService::WebAPIsBehav(caf::event_based_actor * self) {
 
 }
 
-void * TranService::LogDeleteThread(void *) {
+void TranService::TranGCBehav(caf::event_based_actor * self){
 
 }
 
-void   TranService::RecoveryFromLog( ) {
+void TranService::LogGCBehav(caf::event_based_actor * self) {
+
+}
+
+void TranService::RecoveryFromLog( ) {
 
 }
 
@@ -56,10 +56,10 @@ void TranService::RecoveryFromCatalog() {
 
 }
 
-Tran * TranAPIs::Local::CreateWriteTran(
-    vector<pair<UInt64,UInt64>> & partList){
+Tran * TranAPIs::Local::CreateWriteTran(vector<UInt64> & partList,
+                                        vector<UInt32> & tupleNumList ){
 
-  /*
+   /*
     UInt64 id = TranService::TM.Id.fetch_add(1);
     Tran* tran_ptr = TranService::TM.WriteList.Insert();
     //cout << "s0" << endl;
@@ -79,20 +79,19 @@ Tran * TranAPIs::Local::CreateWriteTran(
     TranService::TM.AbortPreCount ++;
    // cout << "s3" << endl;
     return tran_ptr;
-    */
+     */
 }
-
+/*
 Snapshot TranAPIs::Local::CreateReadTran(vector<UInt64> & partList){
   Snapshot snapshot;
-  /*
+
   TranService & ts = TranService::getInstance();
   for (auto & part : partList) {
     snapshot.CheckpointList[part] = ts.TM.CheckpointList[part].MemoryPos;
   }
   auto ptr = ts.TM.WriteHead.load();
   auto rate = (double)ts.TM.CommitCount / (double)ts.TM.AbortPreCount;
-  */
-  /*
+
 
   if (rate >= ts.LowerRate &&  rate <= ts.UpperRate) { // scan implement
     while (ptr !=  nullptr) {
@@ -107,27 +106,36 @@ Snapshot TranAPIs::Local::CreateReadTran(vector<UInt64> & partList){
   } else if (rate > ts.UpperRate) { // simd implement
 
   }
-  */
+
   return snapshot;
 }
+  */
 
 RetCode TranAPIs::Local::CommitWriteTran(Tran * tranPtr) {
-  tranPtr->IsVisible = true;
-  TranService::TM.CommitCount ++;
-  TranService::TM.AbortPreCount --;
-  LogService::LogCommit(tranPtr->Id);
+
   return 0;
 }
 
 RetCode TranAPIs::Local::AbortWriteTran(Tran * tranPtr) {
-  tranPtr->IsGarbage = true;
-  LogService::LogAbort(tranPtr->Id);
+
   return 0;
 }
 
-RetCode TranAPIs::Local::CommitReadTran(Tran * tranPtr) {
 
-  return 0;
+RetCode TranAPIs::Local::getSnapshot(vector<UInt64> & partList, Snapshot & snapshot){
+
+}
+
+Checkpoint TranAPIs::Local::CreateCPTran(UInt64 partId) {
+
+}
+
+RetCode TranAPIs::Local::CommitCPTran(Checkpoint & cp) {
+
+}
+
+RetCode TranAPIs::Local::AbortCPTran(Checkpoint & cp) {
+
 }
 
 

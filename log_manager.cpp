@@ -102,6 +102,7 @@ void LogManager::Append(const string & log){
 }
 
 void LogManager::Append(const string & prefix, char * buffer, UInt64 len, const string & suffix){
+
   /* 新建日志文件 */
   if (log_head == nullptr) {
      struct timeval ts;
@@ -120,7 +121,6 @@ void LogManager::Append(const string & prefix, char * buffer, UInt64 len, const 
 
   /* 日志文件已满 */
   if(size >= size_max ) {
-
     fclose(log_head);
     log_head = nullptr;
   }
