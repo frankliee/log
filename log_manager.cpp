@@ -51,6 +51,10 @@ void LogService::CollectorBehav(caf::event_based_actor * self){
           LogM.Append(LogBeginContent(id));
           return caf::make_message(OkAtom::value);
         },
+        [=](CPAtom, UInt64 id, UInt64 partId, UInt64 memPos)->caf::message {
+          LogM.Append(LogCPContent(id, partId, memPos));
+          return caf::make_message(OkAtom::value);
+        },
       [=](WriteAtom,UInt64 id, UInt64 partid, UInt64 pos,
           UInt64 offset)->caf::message {
           LogM.Append(LogWriteContent(id, partid, pos, offset));
@@ -58,6 +62,10 @@ void LogService::CollectorBehav(caf::event_based_actor * self){
         },
       [=](CommitAtom, UInt64 id)->caf::message{
           LogM.Append(LogCommitContent(id));
+          return caf::make_message(OkAtom::value);
+        },
+      [=](CommitAtom, UInt64 id, UInt64 hdfsPos)->caf::message{
+          LogM.Append(LogCommitContent(id, hdfsPos));
           return caf::make_message(OkAtom::value);
         },
       [=](AbortAtom, UInt64 id)->caf::message{

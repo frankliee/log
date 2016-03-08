@@ -56,30 +56,30 @@ void TranService::RecoveryFromCatalog() {
 
 }
 
-Tran * TranAPIs::Local::CreateWriteTran(vector<UInt64> & partList,
-                                        vector<UInt32> & tupleNumList ){
+Tran * TranAPIs::Local::CreateWriteTran(vector<FixTupleStrip> & stripList ){
 
-   /*
-    UInt64 id = TranService::TM.Id.fetch_add(1);
-    Tran* tran_ptr = TranService::TM.WriteList.Insert();
-    //cout << "s0" << endl;
-    tran_ptr->Init(id, kWrite);
-    //cout << "s1" << endl;
-    string log = LogService::LogBeginContent(id);
-    for (auto i=0; i<partList.size(); i++) {
-        auto partid = partList[i].first;
-        auto offset = partList[i].second;
-        auto pos = TranService::TM.PosList[partid].fetch_add(offset);
-        tran_ptr->StripList.emplace_back(partid, pos, offset);
-        log += LogService::LogWriteContent(tran_ptr->Id,partid,pos,offset);
-     }
-    cout << TranService::TM.WriteList.ToString() << endl;
-   // cout << "s2" << endl;
-    LogService::LogAppend(log);
-    TranService::TM.AbortPreCount ++;
-   // cout << "s3" << endl;
-    return tran_ptr;
-     */
+  if (stripList.size() == 0)
+    return nullptr;
+  UInt64 id = TranService::getId();
+  Tran * tran_ptr = & TranService::getHead()->PayLoad;
+  tran_ptr->setId(id);
+  string log = LogService::LogBeginContent(id);
+  for (auto i=0; i<stripList.size(); i++) {
+    UInt64 partId = stripList[i].PartId;
+    UInt64 pos = 0;
+    UInt64 new_pos = 0;
+    UInt32 offset = 0;
+    do {
+      pos = TranService::TM.PosList[partId].load();
+      offset = stripList[i].SizeOfTuple * stripList[i].NumOfTuple;
+      new_pos = pos + offset;
+    } while(!TranService::TM.PosList[partId].compare_exchange_weak(pos, new_pos));
+    tran_ptr->StripList.emplace_back(partId, pos, offset);
+    log += LogService::LogWriteContent(id, partId, pos, offset);
+  }
+  LogService::LogAppend(log);
+  TranService::TM.Count ++;
+  return tran_ptr;
 }
 /*
 Snapshot TranAPIs::Local::CreateReadTran(vector<UInt64> & partList){
@@ -112,30 +112,77 @@ Snapshot TranAPIs::Local::CreateReadTran(vector<UInt64> & partList){
   */
 
 RetCode TranAPIs::Local::CommitWriteTran(Tran * tranPtr) {
-
+  LogService::LogCommit(tranPtr->Id);
+  tranPtr->IsVisible = true;
+  TranService::TM.CommitCount ++;
   return 0;
 }
 
 RetCode TranAPIs::Local::AbortWriteTran(Tran * tranPtr) {
-
+  LogService::LogAbort(tranPtr->Id);
+  tranPtr->IsGarbage = true;
   return 0;
 }
 
-
 RetCode TranAPIs::Local::getSnapshot(vector<UInt64> & partList, Snapshot & snapshot){
-
+  snapshot.clear();
+  for (auto & partId:partList) {
+    vector<Strip> stripList = {Strip(partId, 0, TranService::getMemCP(partId))};
+    snapshot[partId] = stripList;
+  }
+  Node<Tran> * ptr = TranService::getHead();
+  while (ptr != nullptr) {
+    if (ptr->PayLoad.IsVisible)
+      for (auto & strip : ptr->PayLoad.StripList) {
+          if (strip.Pos >= snapshot[strip.PartId][0].Offset)
+              snapshot[strip.PartId].push_back(strip);
+        }
+    ptr = ptr->Next;
+  }
+  return 0;
 }
 
-Checkpoint TranAPIs::Local::CreateCPTran(UInt64 partId) {
-
+Checkpoint  TranAPIs::Local::CreateCPTran(UInt64 partId) {
+  UInt64 id = TranService::getId();
+  UInt64 old_mem_cp = TranService::getMemCP(partId);
+  UInt64 new_mem_cp = old_mem_cp;
+  UInt64 old_hdfs_cp = TranService::getHdfsCP(partId);
+  UInt64 new_hdfs_cp = old_mem_cp;
+  Node<Tran> * ptr = TranService::getHead();
+  vector<Strip> buffer;
+  while (ptr != nullptr) {
+    if (ptr->PayLoad.IsVisible) {
+      for (auto & strip : ptr->PayLoad.StripList) {
+        if (strip.PartId == partId && strip.Pos >= old_mem_cp)
+          buffer.push_back(strip);
+      }
+    }
+    ptr = ptr->Next;
+  }
+  sort(buffer.begin(),buffer.end(),
+       [](const Strip & a, const Strip & b){return a.Pos < b.Pos;});
+  for (auto & strip : buffer) {
+    if (strip.Pos != new_mem_cp)
+      break;
+    else
+      new_mem_cp = strip.Pos + strip.Offset;
+  }
+  LogService::LogCP(id, partId, new_mem_cp);
+  return Checkpoint(id, partId, new_mem_cp, old_mem_cp,new_mem_cp,old_mem_cp);
 }
 
-RetCode TranAPIs::Local::CommitCPTran(Checkpoint & cp) {
-
+RetCode TranAPIs::Local::CommitCPTran(Checkpoint cp) {
+  LogService::LogCP(cp.Id,cp.PartId,cp.NewMemPos);
+  TranService::TM.MemCPList[cp.PartId] = cp.NewMemPos;
+  TranService::TM.HdfsCPList[cp.PartId] = cp.NewHdfsPos;
+  return 0;
 }
 
-RetCode TranAPIs::Local::AbortCPTran(Checkpoint & cp) {
-
+RetCode TranAPIs::Local::AbortCPTran(Checkpoint cp) {
+  LogService::LogAbort(cp.Id);
+  TranService::TM.MemCPList[cp.PartId] = cp.NewMemPos;
+  TranService::TM.HdfsCPList[cp.PartId] = cp.NewHdfsPos;
+  return 0;
 }
 
 

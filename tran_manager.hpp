@@ -77,9 +77,14 @@ const double kDefaulteUpperRate = 1000000;
 const int kDefaultGCInterval = 2;
 
 
+struct FixTupleStrip {
+  UInt64 PartId;
+  UInt64 Pos;
+  UInt32 SizeOfTuple;
+  UInt32 NumOfTuple;
+};
 
-class Strip {
- public:
+struct Strip {
   UInt64 PartId;
   UInt64 Pos;
   UInt32 Offset;
@@ -102,7 +107,7 @@ class Tran{
   vector<Strip> StripList;
   Tran() {}
   ~Tran() {}
-  void setID(UInt64 id){ Id = id;}
+  void setId(UInt64 id){ Id = id;}
   string ToString() {
     string stripList = "striplist:\n";
     for (auto & strip:StripList)
@@ -118,8 +123,8 @@ struct TranManager{
   atomic<UInt32> Count;
   unordered_map<UInt64, UInt64> MemCPList;
   unordered_map<UInt64, UInt64> HdfsCPList;
-  unordered_map<UInt64,atomic<UInt64>> PosList;
-  LockFreeList<Tran> TranList;
+  unordered_map<UInt64, atomic<UInt64>> PosList;
+  LockFreeList<Tran> WriteTranList;
 };
 
 class TranService{
@@ -146,6 +151,18 @@ class TranService{
    RecoveryFromLog();
    caf::spawn(WebAPIsBehav);
   }
+  static UInt64 getId() {
+    return TM.Id.fetch_add(1);
+  }
+  static Node<Tran> * getHead() {
+    return TM.WriteTranList.Head.load();
+  }
+  static UInt64 getMemCP(UInt64 partId){
+    return TM.MemCPList[partId];
+  }
+  static UInt64 getHdfsCP(UInt64 partId) {
+    return TM.HdfsCPList[partId];
+  }
  private:
    static void RecoveryFromLog();
    static void RecoveryFromCatalog();
@@ -156,27 +173,36 @@ class TranService{
 
 using Snapshot = map<UInt64, vector<Strip>>;
 
-struct Checkpoint{
+class Checkpoint{
+ public:
   UInt64 Id;
   UInt64 PartId;
   UInt64 NewMemPos;
+  UInt64 OldMemPos;
   UInt64 NewHdfsPos;
+  UInt64 OldHPos;
+  Checkpoint() {}
+  Checkpoint(UInt64) {}
+  bool IsVaild() { return NewMemPos > OldMemPos;}
+  Checkpoint(UInt64 id,UInt64 partId,
+             UInt64 newMPos,UInt64 oldMPos,UInt64 newHPos,UInt64 oldHPos):
+             Id(id),PartId(partId),
+             NewMemPos(newMPos),OldMemPos(oldMPos),NewHdfsPos(newHPos),OldHPos(oldHPos){}
 };
 
 class TranAPIs{
  public:
   class Local{
    public:
-    static Tran * CreateWriteTran(vector<UInt64> & partList,
-                                  vector<UInt32> & tupleNumList);
+    static Tran * CreateWriteTran(vector<FixTupleStrip> & stripList);
     static RetCode CommitWriteTran(Tran * tranPtr);
     static RetCode AbortWriteTran(Tran * tranPtr);
 
     static RetCode getSnapshot(vector<UInt64> & partList, Snapshot & snapshot);
 
-    static Checkpoint CreateCPTran(UInt64 partId);
-    static RetCode CommitCPTran(Checkpoint & cp);
-    static RetCode AbortCPTran(Checkpoint & cp);
+    static Checkpoint  CreateCPTran(UInt64 partId);
+    static RetCode CommitCPTran(Checkpoint cp);
+    static RetCode AbortCPTran(Checkpoint cp);
 
   };
   class Web{};

@@ -53,7 +53,7 @@ using CommitAtom = caf::atom_constant<caf::atom("commit")>;
 using AbortAtom = caf::atom_constant<caf::atom("abort")>;
 using WriteAtom = caf::atom_constant<caf::atom("write")>;
 using DataAtom = caf::atom_constant<caf::atom("data")>;
-using CheckpointAtom = caf::atom_constant<caf::atom("checkpoint")>;
+using CPAtom = caf::atom_constant<caf::atom("checkpoint")>;
 
 using UInt64 = unsigned long long;
 using UInt32 = unsigned int;
@@ -90,20 +90,37 @@ class LogService {
   inline static string LogCommitContent(UInt64 Tid) {
     return "commit<"+to_string(Tid)+">\n";
   }
-
+  inline static string LogCommitContent(UInt64 Tid, UInt64 hdfsPos) {
+    return "commit<"+to_string(Tid)+","+to_string(hdfsPos)+">\n";
+  }
   inline static string LogAbortContent(UInt64 Tid) {
     return "abort<"+to_string(Tid)+">\n";
   }
-
+  inline static string LogCPContent(UInt64 Tid,UInt64 partId,UInt64 memPos){
+    return "checkpoint<"+to_string(Tid)+","+to_string(partId)
+        +","+to_string(memPos)+">\n";
+  }
   static void LogBegin(UInt64 Tid) {
      caf::scoped_actor self;
      self->sync_send(Collector,BeginAtom::value,Tid).await(
          [&](OkAtom) {}
      );
    }
+  static void LogCP(UInt64 Tid, UInt64 partId, UInt64 memPos) {
+    caf::scoped_actor self;
+    self->sync_send(Collector,CPAtom::value,Tid,partId,memPos).await(
+          [&](OkAtom) {}
+    );
+  }
   static void LogCommit(UInt64 Tid) {
     caf::scoped_actor self;
     self->sync_send(Collector,CommitAtom::value,Tid).await(
+        [&](OkAtom) {}
+    );
+  }
+  static void LogCommit(UInt64 Tid, UInt64 hdfsPos) {
+    caf::scoped_actor self;
+    self->sync_send(Collector,CommitAtom::value,Tid, hdfsPos).await(
         [&](OkAtom) {}
     );
   }
