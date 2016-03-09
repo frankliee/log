@@ -131,13 +131,20 @@ RetCode TranAPIs::Local::getSnapshot(vector<UInt64> & partList, Snapshot & snaps
     snapshot[partId] = stripList;
   }
   Node<Tran> * ptr = TranService::getHead();
-  while (ptr != nullptr) {
-    if (ptr->PayLoad.IsVisible)
-      for (auto & strip : ptr->PayLoad.StripList) {
-          if (strip.Pos >= snapshot[strip.PartId][0].Offset)
-              snapshot[strip.PartId].push_back(strip);
-        }
-    ptr = ptr->Next;
+  auto rate = TranService::TM.CommitCount / TranService::TM.Count;
+  if (rate >= kDefaulteLowerRate && rate <= kDefaulteUpperRate) {
+    while (ptr != nullptr) {
+      if (ptr->PayLoad.IsVisible)
+        for (auto & strip : ptr->PayLoad.StripList) {
+            if (strip.Pos >= snapshot[strip.PartId][0].Offset)
+                snapshot[strip.PartId].push_back(strip);
+          }
+      ptr = ptr->Next;
+    }
+  } else if ( rate < kDefaulteLowerRate) {
+
+  } else if ( rate > kDefaulteUpperRate) {
+
   }
   return 0;
 }

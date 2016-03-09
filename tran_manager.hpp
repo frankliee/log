@@ -32,6 +32,7 @@
 #include <vector>
 #include <tuple>
 #include <iostream>
+#include <functional>
 #include <atomic>
 #include <memory>
 #include <map>
@@ -57,6 +58,7 @@ using std::atomic_is_lock_free;
 using std::map;
 using std::pair;
 using std::unordered_map;
+using std::function;
 
 using UInt64 = unsigned long long;
 using UInt32 = unsigned int;
@@ -95,6 +97,47 @@ struct Strip {
     return "PartId:"+to_string(PartId)+",Pos:"+to_string(Pos)+
         ",Offset:"+to_string(Offset)+"\n";
    }
+
+  static void Map(vector<Strip> & input, map<UInt64,vector<Strip>> & output) {
+    output.clear();
+    for (auto & strip : input) {
+      if (output.find(strip.PartId) != output.end())
+        output[strip.PartId].push_back(strip);
+      else
+        output[strip.PartId] =  vector<Strip>();
+    }
+  }
+
+  static void Sort(vector<Strip> & input) {
+    sort(input.begin(), input.end(),
+         [](const Strip & a, const Strip & b){ return a.Pos < b.Pos; });
+  }
+
+  static void Merge(vector<Strip> & input) {
+      vector<Strip> buffer(input);
+      input.clear();
+      if (buffer.size() == 0 )return ;
+      if (buffer.size() == 1) {input.push_back(buffer[0]);}
+      UInt64 begin = buffer[0].Pos;
+      UInt64 end = buffer[0].Pos + buffer[0].Offset;
+      for (auto i=1; i<buffer.size();i++){
+          if (end >= buffer[i].Pos)
+            end = buffer[i].Pos + buffer[i].Offset;
+          else {
+            input.push_back(Strip(buffer[0].PartId, begin, end - begin));
+            begin = buffer[i].Pos;
+            end = buffer[i].Pos + buffer[i].Offset;
+              }
+       }
+      input.push_back(Strip(buffer[0].PartId, begin, end -begin));
+  }
+  static void Filter(vector<Strip> & input, function<bool(Strip &)> fuc) {
+     vector<Strip> buffer(input);
+     input.clear();
+     for (auto & strip : buffer)
+       if (fuc(strip))
+         input.push_back(strip);
+  }
 };
 
 
@@ -181,6 +224,7 @@ class Checkpoint{
   UInt64 OldMemPos;
   UInt64 NewHdfsPos;
   UInt64 OldHPos;
+  vector<Strip> MergeList;
   Checkpoint() {}
   Checkpoint(UInt64) {}
   bool IsVaild() { return NewMemPos > OldMemPos;}
